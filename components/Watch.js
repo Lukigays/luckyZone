@@ -12,7 +12,7 @@ import { SITE_URL } from '@/lib/site';
  * Jika engine tidak mengembalikan stream, dibuat URL VidFast (Server 7) dari ID di slug.
  */
 function vidfastFallback(slug, season, episode) {
-  const m = /^(movie|tv)-(\d+)$/.exec(slug || '');
+  const m = /^(movie|tv)-(\d+|tt\d+)$/.exec(slug || '');
   if (!m) return null;
   return m[1] === 'tv' ? `https://vidfast.vc/tv/${m[2]}/${season}/${episode}` : `https://vidfast.vc/movie/${m[2]}`;
 }
