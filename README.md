@@ -27,3 +27,16 @@ Untuk series dipakai `episodes[n].stream.url`. Jika engine tidak mengembalikan s
 URL VidFast dibuat dari ID TMDB di slug (`movie-123` → `https://vidfast.vc/movie/123`).
 
 CLI engine tetap bisa dipakai: `npm run cli -- trending`
+
+## Sumber data (otomatis)
+
+`lib/source.js` mengatur sumber data:
+
+1. **moviezone.js** dicoba duluan (engine utama).
+2. Kalau gagal / 403 / timeout 8 detik, otomatis pindah ke **Cinemeta** (`lib/cinemeta.js`, publik, tanpa API key) dan moviezone dilewati selama 10 menit.
+3. Slug `movie-tt…` / `tv-tt…` (IMDb ID) selalu dari Cinemeta; slug angka (TMDB) dari moviezone.
+
+Streaming tetap **Server 7 VidFast** (`vidfast.vc/movie/{tmdb|imdb}`, `vidfast.vc/tv/{id}/{s}/{e}`).
+Sinopsis dari Cinemeta otomatis diterjemahkan ke Bahasa Indonesia.
+
+Paksa sumber tertentu lewat env: `LZ_SOURCE=auto | moviezone | cinemeta` (default `auto`).
