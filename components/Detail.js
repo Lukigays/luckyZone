@@ -8,6 +8,7 @@ import RatingStars from './RatingStars';
 import { hideOnError } from './MovieCard';
 import { isReminded, addReminder, removeReminder, vibrate } from '@/lib/storage';
 import { SITE_URL } from '@/lib/site';
+import useIdSynopsis from './useIdSynopsis';
 
 const glassBtn = {
   background: 'rgba(255,255,255,0.12)',
@@ -144,6 +145,7 @@ export default function Detail({ slug }) {
   const [reminded, setReminded] = useState(false);
   const [remState, setRemState] = useState('idle');
   const [castOpen, setCastOpen] = useState(false);
+  const synopsisId = useIdSynopsis(m);
   const [shareOpen, setShareOpen] = useState(false);
   const [tint, setTint] = useState(null);
   const imgRef = useRef(null);
@@ -219,7 +221,7 @@ export default function Detail({ slug }) {
     );
 
   const isSeries = m.type === 'Series';
-  const synopsis = m.synopsis || m.overview || m.description || '';
+  const synopsis = synopsisId;
   const seasons = m.seasons || [];
   const notReleased = !!m.status && m.status.toLowerCase() !== 'released' && !isSeries;
   const cast = m.castDetailed || [];

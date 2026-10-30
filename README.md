@@ -40,3 +40,18 @@ Streaming tetap **Server 7 VidFast** (`vidfast.vc/movie/{tmdb|imdb}`, `vidfast.v
 Sinopsis dari Cinemeta otomatis diterjemahkan ke Bahasa Indonesia.
 
 Paksa sumber tertentu lewat env: `LZ_SOURCE=auto | moviezone | cinemeta` (default `auto`).
+
+## Server streaming
+
+`lib/servers.js` berisi 7 server (sama seperti situs asli):
+1 VidSrcWiki · 2 SuperEmbed · 3 VidSrc · 4 VidLink ★ · 5 2Embed · 6 VSEmbed · 7 VidFast (BETA, URL dari moviezone.js).
+
+- Default: server terakhir yang dipilih pengunjung (disimpan di browser), kalau belum ada → VidLink.
+- Tombol **Server Lain** di bawah pemutar langsung pindah ke server berikutnya.
+- Kalau pemutar belum termuat setelah 12 detik muncul tombol "Terlalu lama? Coba server lain".
+- Item yang hanya punya ID IMDb (tt…) tetap bisa diputar; VidLink-series dilewati karena butuh ID TMDB.
+
+## Terjemahan sinopsis
+
+`lib/translate.js`: Google (clients5) → Google (gtx) → MyMemory. Kalau server Vercel kena limit,
+browser pengunjung yang menerjemahkan (`components/useIdSynopsis.js`).

@@ -2,8 +2,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ShareModal from './ShareModal';
+import AdTips from './AdTips';
 import { addHistory } from '@/lib/storage';
 import { SITE_URL } from '@/lib/site';
+import { buildServers, idsFrom, pickDefault, savePref, RECOMMENDED, SERVER_DOMAINS } from '@/lib/servers';
+import useIdSynopsis from './useIdSynopsis';
 
 /**
  * Stream memakai output engine moviezone.js → `stream` (Server 7: VidFast).
@@ -33,6 +36,44 @@ export default function Watch({ slug }) {
   const [landscape, setLandscape] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const box = useRef(null);
+  const [frameLoading, setFrameLoading] = useState(true);
+  const [slow, setSlow] = useState(false);
+  const curUrl = servers[active]?.url;
+  const synopsis = useIdSynopsis(m);
+
+  // Indikator memuat + saran ganti server bila terlalu lama
+  useEffect(() => {
+    if (!curUrl) return;
+    setFrameLoading(true);
+    setSlow(false);
+    const t = setTimeout(() => setSlow(true), 12000);
+    return () => clearTimeout(t);
+  }, [curUrl]);
+
+  // Percepat koneksi awal ke semua server
+  useEffect(() => {
+    const els = SERVER_DOMAINS.map((href) => {
+      const l = document.createElement('link');
+      l.rel = 'preconnect';
+      l.href = href;
+      l.crossOrigin = '';
+      document.head.appendChild(l);
+      return l;
+    });
+    return () => els.forEach((l) => l.remove());
+  }, []);
+
+  const choose = useCallback(
+    (i) => {
+      if (!servers[i]) return;
+      setActive(i);
+      savePref(servers[i].server);
+    },
+    [servers]
+  );
+  const nextServer = useCallback(() => {
+    if (servers.length > 1) choose((active + 1) % servers.length);
+  }, [servers, active, choose]);
   const lastTap = useRef(0);
 
   const unlockTap = useCallback(() => {
@@ -82,11 +123,20 @@ export default function Watch({ slug }) {
           if (ep?.stream?.url) stream = ep.stream;
         } catch {}
       }
-      const url = stream?.url || vidfastFallback(slug, season, episode);
+      const isTv = detail.type === 'Series' || isTvSlug;
+      let list = buildServers(idsFrom(detail, slug), isTv ? 'tv' : 'movie', season, episode);
+      // URL dari engine (moviezone.js: Server 7 VidFast) diutamakan untuk server yang sama
+      const engineUrl = stream?.url || vidfastFallback(slug, season, episode);
+      if (engineUrl) {
+        const n = stream?.serverNumber || 7;
+        const i = list.findIndex((x) => x.number === n);
+        if (i >= 0) list[i] = { ...list[i], url: engineUrl };
+        else list.push({ number: n, server: stream?.serverName || 'VidFast', url: engineUrl });
+      }
       if (off) return;
       setM(detail);
-      setServers(url ? [{ server: stream?.serverName || 'VidFast', number: stream?.serverNumber || 7, url }] : []);
-      setActive(0);
+      setServers(list);
+      setActive(pickDefault(list));
       if (detail.title && detail.title !== 'Sedang diputar') {
         addHistory(detail, detail.type === 'Series' ? { season, episode } : undefined);
       }
@@ -243,11 +293,29 @@ export default function Watch({ slug }) {
             allow="fullscreen; autoplay; encrypted-media; picture-in-picture; web-share"
             referrerPolicy="no-referrer"
             title={m.title}
+            onLoad={() => setFrameLoading(false)}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center gap-3 flex-col">
             <i className="fa-solid fa-circle-exclamation text-3xl text-dim" />
             <p className="text-dim text-sm">Pilih server di bawah</p>
+          </div>
+        )}
+        {cur && frameLoading && (
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3"
+            style={{ zIndex: 5, background: '#000', pointerEvents: slow ? 'auto' : 'none' }}
+          >
+            <i className="fa-solid fa-circle-notch fa-spin text-2xl text-gold" />
+            <p className="text-dim text-xs">Memuat Server {cur.number}…</p>
+            {slow && servers.length > 1 && (
+              <button
+                onClick={nextServer}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gold text-ink"
+              >
+                <i className="fa-solid fa-forward text-[11px]" /> Terlalu lama? Coba server lain
+              </button>
+            )}
           </div>
         )}
         {locked && (
@@ -296,6 +364,14 @@ export default function Watch({ slug }) {
             {locked ? 'Terkunci' : 'Kunci Layar'}
           </button>
           <div className="flex-1" />
+          {servers.length > 1 && (
+            <button
+              onClick={nextServer}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-ghost border border-line text-silver hover:border-gold/40 hover:text-gold transition-colors"
+            >
+              <i className="fa-solid fa-rotate text-[11px]" /> Server Lain
+            </button>
+          )}
           <button
             onClick={toggleLandscape}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-ghost border border-line text-silver hover:border-gold/40 hover:text-gold transition-colors"
@@ -317,29 +393,30 @@ export default function Watch({ slug }) {
                 const on = active === i;
                 return (
                   <button
-                    key={i}
+                    key={s.number}
                     onClick={() => i !== active && setPending(i)}
-                    style={{ gridColumn: 'span 2', whiteSpace: 'nowrap' }}
                     className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-2 text-center border transition-colors duration-150 ${
                       on ? 'bg-goldf border-gold/50 text-gold' : 'bg-inke border-line text-silver hover:border-line active:scale-[0.98]'
                     }`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${on ? 'bg-gold' : 'bg-dim'}`} />
                     <span className="text-[12px] font-medium leading-none">Server {s.number}</span>
-                    <span
-                      className={`text-[8px] font-bold leading-none px-1 py-0.5 rounded ${on ? 'bg-gold/20 text-gold' : 'bg-line text-dim'}`}
-                    >
-                      {s.server.toUpperCase()}
-                    </span>
+                    {s.number === 7 && (
+                      <span className={`text-[8px] font-bold leading-none px-1 py-0.5 rounded ${on ? 'bg-gold/20 text-gold' : 'bg-line text-dim'}`}>
+                        BETA
+                      </span>
+                    )}
+                    {s.server === RECOMMENDED && <i className={`fa-solid fa-star text-[8px] ${on ? 'text-gold' : 'text-dim'}`} />}
                   </button>
                 );
               })}
             </div>
             <p className="text-[10px] text-dim mt-3">
               <i className="fa-solid fa-circle-info mr-1" />
-              Streaming via Server 7 (VidFast). Jika tidak bisa putar, muat ulang halaman.
+              Jika tidak bisa putar atau muncul error 404, coba server lain.
             </p>
           </div>
+          <AdTips />
           <div className="px-4 py-4 pb-8">
             <h2 className="font-display font-bold text-lg mb-1">{m.title}</h2>
             <div className="flex items-center gap-3 text-dim text-xs mb-3">
@@ -352,7 +429,7 @@ export default function Watch({ slug }) {
                 </div>
               )}
             </div>
-            {m.synopsis && <p className="text-silver text-sm leading-relaxed line-clamp-3">{m.synopsis}</p>}
+            {synopsis && <p className="text-silver text-sm leading-relaxed line-clamp-3">{synopsis}</p>}
             <button
               onClick={() => router.push(`/movie/${slug}`)}
               className="flex items-center gap-2 mt-4 text-silver text-xs hover:text-gold transition-colors"
@@ -388,7 +465,7 @@ export default function Watch({ slug }) {
               </button>
               <button
                 onClick={() => {
-                  setActive(pending);
+                  choose(pending);
                   setPending(null);
                 }}
                 className="text-gold text-sm font-bold px-2 py-1"
